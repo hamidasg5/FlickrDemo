@@ -1,10 +1,7 @@
 package com.flickrdemo;
 
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.LoaderManager;
@@ -39,7 +36,7 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
     private static final String TAG = "HomeActivity";
 
     private static final int FLICKR_FETCHER_LOADER_ID = 1;
-    private static final int ITEMS_PER_PAGE = 9;
+    private static final int ITEMS_PER_PAGE = 100;
 
     private int mNumColumns = 3;
     private int mPage = 1;
@@ -47,7 +44,6 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
     private RecyclerView mPhotoRecyclerView;
     private GridLayoutManager mLayoutManager;
     private PhotoAdapter mPhotoAdapter;
-    private ThumbnailDownloader<PhotoHolder> mThumbnailDownloader;
     private TextView mNoInternetTextView;
     private ProgressBar mLoadingProgressBar;
 
@@ -106,26 +102,6 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
         mPhotoRecyclerView.setVisibility(View.GONE);
 
         getSupportLoaderManager().initLoader(FLICKR_FETCHER_LOADER_ID, null, this).forceLoad();
-
-        Handler responseHandler = new Handler();
-        mThumbnailDownloader = new ThumbnailDownloader<>(responseHandler);
-        mThumbnailDownloader.setThumbnailDownloadListener(new ThumbnailDownloader.ThumbnailDownloadListener<PhotoHolder>() {
-            @Override
-            public void onThumbnailDownloaded(PhotoHolder target, Bitmap thumbnail) {
-                Drawable drawable = new BitmapDrawable(getResources(), thumbnail);
-                target.bindDrawable(drawable);
-            }
-        });
-        mThumbnailDownloader.start();
-        mThumbnailDownloader.getLooper();
-    }
-
-    @Override
-    protected void onDestroy()
-    {
-        super.onDestroy();
-        mThumbnailDownloader.clearQueue();
-        mThumbnailDownloader.quit();
     }
 
     @Override
@@ -295,11 +271,12 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
         public void onBindViewHolder(PhotoHolder photoHolder, int position)
         {
             FlickrItem item = mFlickrItems.get(position);
-
-            Drawable placeholder = getDrawable(R.drawable.image_placeholder);
-            photoHolder.bindDrawable(placeholder);
-            mThumbnailDownloader.queueThumbnail(photoHolder, item.getUrl());
             photoHolder.bindItem(item);
+            Glide.with(HomeActivity.this)
+                    .asBitmap()
+                    .load(item.getUrl())
+                    .apply(new RequestOptions().placeholder(R.drawable.image_placeholder))
+                    .into(photoHolder.mImageView);
         }
 
         @Override
