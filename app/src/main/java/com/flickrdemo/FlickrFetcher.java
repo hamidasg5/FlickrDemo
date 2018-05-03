@@ -3,6 +3,8 @@ package com.flickrdemo;
 import android.net.Uri;
 import android.util.Log;
 
+import com.google.gson.Gson;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -13,6 +15,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class FlickrFetcher
@@ -96,7 +99,7 @@ public class FlickrFetcher
             Log.i(TAG, url);
             String jsonString = getUrlString(url);
             JSONObject root = new JSONObject(jsonString);
-            parseItems(items, root);
+            items = parseItems(root);
         }
         catch (IOException ioe)
         {
@@ -127,25 +130,13 @@ public class FlickrFetcher
         return builder.build().toString();
     }
 
-    private void parseItems(List<FlickrItem> items, JSONObject root) throws IOException, JSONException
+    private List<FlickrItem> parseItems(JSONObject root) throws IOException, JSONException
     {
+        List<FlickrItem> items;
         JSONObject photos = root.getJSONObject("photos");
         JSONArray photoArray = photos.getJSONArray("photo");
-
-        for (int i = 0; i < photoArray.length(); i++)
-        {
-            JSONObject photo = photoArray.getJSONObject(i);
-
-            FlickrItem item = new FlickrItem();
-            item.setId(photo.getString("id"));
-            item.setCaption(photo.getString("title"));
-            item.setOwner(photo.getString("owner"));
-
-            if (photo.has("url_s"))
-            {
-                item.setUrl(photo.getString("url_s"));
-                items.add(item);
-            }
-        }
+        Gson gson = new Gson();
+        items = Arrays.asList(gson.fromJson(photoArray.toString(), FlickrItem[].class));
+        return items;
     }
 }

@@ -2,13 +2,20 @@ package com.flickrdemo;
 
 import android.net.Uri;
 
-import java.io.Serializable;
+import com.google.gson.annotations.SerializedName;
 
-public class FlickrItem implements Serializable
+public class FlickrItem
 {
+    @SerializedName("title")
     private String mCaption;
+
+    @SerializedName("id")
     private String mId;
+
+    @SerializedName("url_s")
     private String mUrl;
+
+    @SerializedName("owner")
     private String mOwner;
 
     @Override
