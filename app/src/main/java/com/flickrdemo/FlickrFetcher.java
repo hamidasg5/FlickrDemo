@@ -9,20 +9,19 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
 
 public class FlickrFetcher
 {
     private static final String TAG = "FlickrFetcher";
     private static final String API_KEY = "704850b52056d831ee5c61e918c851f7";
-    private static final String SECRET_KEY = "d19b5a241ce36d8c";
+    //private static final String SECRET_KEY = "d19b5a241ce36d8c";
     private static final String GET_RECENT_METHOD = "flickr.photos.getRecent";
     private static final String GET_POPULAR_METHOD = "flickr.photos.getPopular";
     private static final String SEARCH_METHOD = "flickr.photos.search";
@@ -36,81 +35,54 @@ public class FlickrFetcher
             .appendQueryParameter("safe_search", String.valueOf(1))
             .build();
 
-    public byte[] getUrlBytes(String spec) throws IOException
+    public enum FlickrMethod
     {
-        URL url = new URL(spec);
-        HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+        SEARCH, GET_RECENT, GET_POPULAR
+    }
 
-        try
+    private OkHttpClient mClient = new OkHttpClient();
+    private Gson gson = new Gson();
+
+    public void requestItems(FlickrMethod flickrMethod, Callback callback, int page, String extra)
+    {
+        switch (flickrMethod)
         {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            InputStream inputStream = urlConnection.getInputStream();
-
-            if (urlConnection.getResponseCode() != HttpURLConnection.HTTP_OK)
-            {
-                throw new IOException(urlConnection.getResponseMessage() + ": with " + spec);
-            }
-
-            int bytesRead;
-            byte[] buffer = new byte[1024];
-            while ((bytesRead = inputStream.read(buffer)) > 0)
-            {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-            outputStream.close();
-
-            return outputStream.toByteArray();
-        }
-        finally
-        {
-            urlConnection.disconnect();
+            case GET_RECENT:
+                String recentUrl = getUrl(GET_RECENT_METHOD, null, page);
+                requestUrlBytes(recentUrl, callback);
+                break;
+            case GET_POPULAR:
+                String popularUrl = getUrl(GET_POPULAR_METHOD, null, page);
+                requestUrlBytes(popularUrl, callback);
+                break;
+            case SEARCH:
+                String searchUrl = getUrl(SEARCH_METHOD, (extra==null) ? "flickr" : extra, page);
+                requestUrlBytes(searchUrl, callback);
+                break;
         }
     }
 
-    private String getUrlString(String spec) throws IOException
-    {
-        return new String(getUrlBytes(spec));
-    }
-
-    public List<FlickrItem> getRecent(int page)
-    {
-        String url = getUrl(GET_RECENT_METHOD, null, page);
-        return fetchItems(url);
-    }
-
-    public List<FlickrItem> getPopular(int page)
-    {
-        String url = getUrl(GET_POPULAR_METHOD, null, page);
-        return fetchItems(url);
-    }
-
-    public List<FlickrItem> searchPhotos(String query, int page)
-    {
-        String url = getUrl(SEARCH_METHOD, query, page);
-        return fetchItems(url);
-    }
-
-    private List<FlickrItem> fetchItems(String url)
+    public List<FlickrItem> parseItems(String jsonString)
     {
         List<FlickrItem> items = new ArrayList<>();
-
         try
         {
-            Log.i(TAG, url);
-            String jsonString = getUrlString(url);
             JSONObject root = new JSONObject(jsonString);
-            items = parseItems(root);
-        }
-        catch (IOException ioe)
-        {
-            Log.e(TAG, "Failed to fetch: ", ioe);
+            JSONObject photos = root.getJSONObject("photos");
+            JSONArray photoArray = photos.getJSONArray("photo");
+            items = Arrays.asList(gson.fromJson(photoArray.toString(), FlickrItem[].class));
         }
         catch (JSONException je)
         {
             Log.e(TAG, "Failed to parse json: ", je);
         }
-
         return items;
+    }
+
+    private void requestUrlBytes(String url, Callback callback)
+    {
+        Request request = new Request.Builder().url(url).build();
+        mClient.newCall(request).enqueue(callback);
     }
 
     private String getUrl(String method, String extra, int page)
@@ -128,15 +100,5 @@ public class FlickrFetcher
             builder.appendQueryParameter("text", extra);
         }
         return builder.build().toString();
-    }
-
-    private List<FlickrItem> parseItems(JSONObject root) throws IOException, JSONException
-    {
-        List<FlickrItem> items;
-        JSONObject photos = root.getJSONObject("photos");
-        JSONArray photoArray = photos.getJSONArray("photo");
-        Gson gson = new Gson();
-        items = Arrays.asList(gson.fromJson(photoArray.toString(), FlickrItem[].class));
-        return items;
     }
 }

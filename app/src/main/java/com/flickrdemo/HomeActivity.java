@@ -1,11 +1,8 @@
 package com.flickrdemo;
 
 import android.content.Intent;
-import android.graphics.drawable.Drawable;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.content.Loader;
+import android.os.Handler;
+import android.os.Looper;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.GridLayoutManager;
@@ -28,14 +25,18 @@ import android.widget.Toast;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class HomeActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<List<FlickrItem>>
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.Response;
+
+public class HomeActivity extends AppCompatActivity
 {
     private static final String TAG = "HomeActivity";
 
-    private static final int FLICKR_FETCHER_LOADER_ID = 1;
     private static final int ITEMS_PER_PAGE = 100;
 
     private int mNumColumns = 3;
@@ -47,11 +48,18 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
     private TextView mNoInternetTextView;
     private ProgressBar mLoadingProgressBar;
 
+    private FlickrFetcher mFlickrFetcher;
+    private FlickrFetcher.FlickrMethod mFlickrMethod = FlickrFetcher.FlickrMethod.GET_RECENT;
+    private Handler mHandler;
+
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
+
+        mFlickrFetcher = new FlickrFetcher();
+        mHandler = new Handler(Looper.getMainLooper());
 
         Toolbar toolbar = findViewById(R.id.home_toolbar);
         setSupportActionBar(toolbar);
@@ -88,20 +96,15 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
                     if (mPage * ITEMS_PER_PAGE - 10 < lastIndex)
                     {
                         mPage = mPage + 1;
-                        FetchItemsTask fetchItemsTask = (FetchItemsTask) getSupportLoaderManager().getLoader(FLICKR_FETCHER_LOADER_ID);
-                        if (fetchItemsTask != null)
-                        {
-                            mLoadingProgressBar.setVisibility(View.VISIBLE);
-                            fetchItemsTask.setPage(mPage);
-                            fetchItemsTask.forceLoad();
-                        }
+                        mLoadingProgressBar.setVisibility(View.VISIBLE);
+                        mFlickrFetcher.requestItems(mFlickrMethod, mResponseCallback, mPage, null);
                     }
                 }
             }
         });
         mPhotoRecyclerView.setVisibility(View.GONE);
 
-        getSupportLoaderManager().initLoader(FLICKR_FETCHER_LOADER_ID, null, this).forceLoad();
+        mFlickrFetcher.requestItems(mFlickrMethod, mResponseCallback, mPage, null);
     }
 
     @Override
@@ -117,18 +120,12 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
             public boolean onQueryTextSubmit(String s) {
                 if (!s.trim().equals(""))
                 {
-                    FetchItemsTask fetchItemsTask = (FetchItemsTask) getSupportLoaderManager().getLoader(FLICKR_FETCHER_LOADER_ID);
-                    if (fetchItemsTask != null)
-                    {
-                        mPhotoAdapter.setFlickrItems(new ArrayList<FlickrItem>());
-                        fetchItemsTask.setMethod(FetchItemsTask.Method.SEARCH);
-                        fetchItemsTask.setExtra(s);
-                        fetchItemsTask.setPage(1);
-                        fetchItemsTask.forceLoad();
-                        mPage = 1;
-                        mPhotoRecyclerView.setVisibility(View.GONE);
-                        mLoadingProgressBar.setVisibility(View.VISIBLE);
-                    }
+                    mPhotoAdapter.setFlickrItems(new ArrayList<FlickrItem>());
+                    mPage = 1;
+                    mFlickrMethod = FlickrFetcher.FlickrMethod.SEARCH;
+                    mFlickrFetcher.requestItems(mFlickrMethod, mResponseCallback, mPage, s);
+                    mPhotoRecyclerView.setVisibility(View.GONE);
+                    mLoadingProgressBar.setVisibility(View.VISIBLE);
                 }
                 else
                 {
@@ -148,37 +145,28 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
     @Override
     public boolean onOptionsItemSelected(MenuItem item)
     {
-        FetchItemsTask fetchItemsTask = (FetchItemsTask) getSupportLoaderManager().getLoader(FLICKR_FETCHER_LOADER_ID);
         switch (item.getItemId())
         {
             case R.id.menu_item_recent_photos:
-                if (fetchItemsTask != null)
+                if (mFlickrMethod != FlickrFetcher.FlickrMethod.GET_RECENT)
                 {
-                    if (fetchItemsTask.getMethod() != FetchItemsTask.Method.GET_RECENT)
-                    {
-                        fetchItemsTask.setPage(1);
-                        fetchItemsTask.setMethod(FetchItemsTask.Method.GET_RECENT);
-                        mPhotoAdapter.setFlickrItems(new ArrayList<FlickrItem>());
-                        fetchItemsTask.forceLoad();
-                        mPage = 1;
-                        mPhotoRecyclerView.setVisibility(View.GONE);
-                        mLoadingProgressBar.setVisibility(View.VISIBLE);
-                    }
+                    mPage = 1;
+                    mFlickrMethod = FlickrFetcher.FlickrMethod.GET_RECENT;
+                    mPhotoAdapter.setFlickrItems(new ArrayList<FlickrItem>());
+                    mFlickrFetcher.requestItems(mFlickrMethod, mResponseCallback, mPage, null);
+                    mPhotoRecyclerView.setVisibility(View.GONE);
+                    mLoadingProgressBar.setVisibility(View.VISIBLE);
                 }
                 return true;
             case R.id.menu_item_popular_photos:
-                if (fetchItemsTask != null)
+                if (mFlickrMethod != FlickrFetcher.FlickrMethod.GET_POPULAR)
                 {
-                    if (fetchItemsTask.getMethod() != FetchItemsTask.Method.GET_POPULAR)
-                    {
-                        fetchItemsTask.setPage(1);
-                        fetchItemsTask.setMethod(FetchItemsTask.Method.GET_POPULAR);
-                        mPhotoAdapter.setFlickrItems(new ArrayList<FlickrItem>());
-                        fetchItemsTask.forceLoad();
-                        mPage = 1;
-                        mPhotoRecyclerView.setVisibility(View.GONE);
-                        mLoadingProgressBar.setVisibility(View.VISIBLE);
-                    }
+                    mPage = 1;
+                    mFlickrMethod = FlickrFetcher.FlickrMethod.GET_POPULAR;
+                    mPhotoAdapter.setFlickrItems(new ArrayList<FlickrItem>());
+                    mFlickrFetcher.requestItems(mFlickrMethod, mResponseCallback, mPage, null);
+                    mPhotoRecyclerView.setVisibility(View.GONE);
+                    mLoadingProgressBar.setVisibility(View.VISIBLE);
                 }
                 return true;
             default:
@@ -186,38 +174,52 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
         }
     }
 
-    @NonNull
-    @Override
-    public Loader<List<FlickrItem>> onCreateLoader(int id, @Nullable Bundle args)
-    {
-        return new FetchItemsTask(this, mPage);
-    }
-
-    @Override
-    public void onLoadFinished(@NonNull Loader<List<FlickrItem>> loader, List<FlickrItem> data)
-    {
-        if (data.size() == 0 && mPage == 1)
+    Callback mResponseCallback = new Callback() {
+        @Override
+        public void onFailure(Call call, IOException e)
         {
-            mPhotoRecyclerView.setVisibility(View.GONE);
-            mNoInternetTextView.setVisibility(View.VISIBLE);
-            mLoadingProgressBar.setVisibility(View.GONE);
-            return;
+            Log.e(TAG, e.toString());
+            mHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    mPhotoRecyclerView.setVisibility(View.GONE);
+                    mNoInternetTextView.setVisibility(View.VISIBLE);
+                    mLoadingProgressBar.setVisibility(View.GONE);
+                }
+            });
         }
 
-        mPhotoAdapter.addToList(data);
-        Log.i(TAG, "Page updated");
-
-        mPhotoAdapter.notifyDataSetChanged();
-        mLoadingProgressBar.setVisibility(View.GONE);
-        if (mPhotoRecyclerView.getVisibility() == View.GONE)
+        @Override
+        public void onResponse(Call call, Response response) throws IOException
         {
-            mPhotoRecyclerView.setVisibility(View.VISIBLE);
-            mNoInternetTextView.setVisibility(View.GONE);
-        }
-    }
+            String json = response.body().string();
+            final List<FlickrItem> flickrItems = mFlickrFetcher.parseItems(json);
 
-    @Override
-    public void onLoaderReset(@NonNull Loader<List<FlickrItem>> loader) {}
+            mHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (flickrItems.size() == 0 && mPage == 1)
+                    {
+                        mPhotoRecyclerView.setVisibility(View.GONE);
+                        mNoInternetTextView.setVisibility(View.VISIBLE);
+                        mLoadingProgressBar.setVisibility(View.GONE);
+                        return;
+                    }
+
+                    mPhotoAdapter.addToList(flickrItems);
+                    Log.i(TAG, "Page updated");
+
+                    mPhotoAdapter.notifyDataSetChanged();
+                    mLoadingProgressBar.setVisibility(View.GONE);
+                    if (mPhotoRecyclerView.getVisibility() == View.GONE)
+                    {
+                        mPhotoRecyclerView.setVisibility(View.VISIBLE);
+                        mNoInternetTextView.setVisibility(View.GONE);
+                    }
+                }
+            });
+        }
+    };
 
     private class PhotoHolder extends RecyclerView.ViewHolder implements View.OnClickListener
     {
@@ -230,11 +232,6 @@ public class HomeActivity extends AppCompatActivity implements LoaderManager.Loa
             itemView.setOnClickListener(this);
             mImageView = itemView.findViewById(R.id.item_image_view);
             mImageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        }
-
-        void bindDrawable(Drawable drawable)
-        {
-            mImageView.setImageDrawable(drawable);
         }
 
         void bindItem(FlickrItem flickrItem)
