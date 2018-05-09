@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">FlickrDemo</string>
 
-    <string name="no_internet_connection">No internet connection!</string>
+    <string name="failed_to_get_items">Failed to get items!</string>
 
     <string name="search_photos">Search</string>
     <string name="recent_photos">Recent Photos</string>

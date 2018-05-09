@@ -28,7 +28,7 @@
         android:layout_height="match_parent"
         android:layout_below="@id/home_toolbar"
         android:gravity="center"
-        android:text="@string/no_internet_connection"
+        android:text="@string/failed_to_get_items"
         android:textSize="16sp"
         android:textColor="@color/colorPrimary"/>
 

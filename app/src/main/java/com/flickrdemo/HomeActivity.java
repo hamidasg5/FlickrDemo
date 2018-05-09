@@ -1,6 +1,9 @@
 package com.flickrdemo;
 
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.v7.app.AppCompatActivity;
@@ -104,7 +107,16 @@ public class HomeActivity extends AppCompatActivity
         });
         mPhotoRecyclerView.setVisibility(View.GONE);
 
-        mFlickrFetcher.requestItems(mFlickrMethod, mResponseCallback, mPage, null);
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = connectivityManager.getActiveNetworkInfo();
+        if (activeNetwork.isConnectedOrConnecting())
+        {
+            mFlickrFetcher.requestItems(mFlickrMethod, mResponseCallback, mPage, null);
+        }
+        else
+        {
+            Toast.makeText(this, "No network access!", Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override
